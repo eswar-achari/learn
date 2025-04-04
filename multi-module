@@ -1,0 +1,132 @@
+A Maven project with a parent and child modules follows a multi-module structure where the parent module manages dependencies, configurations, and common properties, while child modules inherit from it.
+
+---
+
+### **Project Structure:**
+```
+maven-multi-module-project/
+│── parent-pom/
+│   ├── pom.xml (Parent POM)
+│── module-a/
+│   ├── pom.xml (Child module A)
+│── module-b/
+│   ├── pom.xml (Child module B)
+│── module-c/
+│   ├── pom.xml (Child module C)
+│── pom.xml (Root POM)
+```
+
+---
+
+### **1. Root `pom.xml`**
+This file serves as the entry point for the build but does not contain project-specific configurations.
+
+```xml
+<project xmlns="http://maven.apache.org/POM/4.0.0" 
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.example</groupId>
+    <artifactId>maven-multi-module-project</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>parent-pom</module>
+    </modules>
+</project>
+```
+
+---
+
+### **2. Parent Module (`parent-pom/pom.xml`)**
+The parent POM defines dependency management, shared dependencies, and plugin configurations.
+
+```xml
+<project xmlns="http://maven.apache.org/POM/4.0.0" 
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.example</groupId>
+    <artifactId>parent-pom</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>../module-a</module>
+        <module>../module-b</module>
+        <module>../module-c</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter</artifactId>
+                <version>3.2.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+---
+
+### **3. Child Module (`module-a/pom.xml`)**
+Each child module inherits dependencies and configurations from the parent.
+
+```xml
+<project xmlns="http://maven.apache.org/POM/4.0.0" 
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.example</groupId>
+        <artifactId>parent-pom</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>module-a</artifactId>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+---
+
+### **4. Build & Run**
+- To **build the project**, run:
+  ```sh
+  mvn clean install
+  ```
+- To **run a specific module**, navigate to the module and run:
+  ```sh
+  mvn spring-boot:run
+  ```
+
+This structure ensures modularization, reusability, and maintainability across multiple projects. 🚀
