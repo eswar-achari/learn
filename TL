@@ -1,0 +1,132 @@
+To create a **Thymeleaf utility class** in Java that takes any **Java object**, extracts all its **fields** (even private ones), puts them into a **Thymeleaf context**, and returns the **rendered string** from a Thymeleaf template — here’s a full implementation.
+
+---
+
+## ✅ Use Case
+
+* **Input**: Java object (`Object`)
+* **Output**: `String` — processed Thymeleaf template with object field values available as variables
+* **Features**:
+
+  * Uses reflection to extract all fields
+  * Dynamically builds `Context` with field values
+  * Renders a provided Thymeleaf template
+
+---
+
+## ✅ Step-by-Step Implementation
+
+### 🔹 1. Utility Class: `ThymeleafRendererUtil.java`
+
+```java
+package com.example.util;
+
+import org.springframework.stereotype.Component;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
+
+import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.Map;
+
+@Component
+public class ThymeleafRendererUtil {
+
+    private final TemplateEngine templateEngine;
+
+    public ThymeleafRendererUtil(TemplateEngine templateEngine) {
+        this.templateEngine = templateEngine;
+    }
+
+    /**
+     * Renders a Thymeleaf template with all fields from the input object added to the context
+     *
+     * @param object       The input Java object
+     * @param templateName The Thymeleaf template name (without .html)
+     * @return Rendered template string
+     */
+    public String renderObject(Object object, String templateName) {
+        if (object == null) return "null";
+
+        Map<String, Object> fieldMap = extractFields(object);
+        Context context = new Context();
+        context.setVariables(fieldMap);
+
+        return templateEngine.process(templateName, context);
+    }
+
+    /**
+     * Extracts all fields (including private) and their values from an object
+     */
+    private Map<String, Object> extractFields(Object object) {
+        Map<String, Object> fieldMap = new HashMap<>();
+        Class<?> clazz = object.getClass();
+
+        while (clazz != null) {
+            for (Field field : clazz.getDeclaredFields()) {
+                field.setAccessible(true);
+                try {
+                    fieldMap.put(field.getName(), field.get(object));
+                } catch (IllegalAccessException ignored) {
+                }
+            }
+            clazz = clazz.getSuperclass(); // to include fields from parent classes
+        }
+
+        return fieldMap;
+    }
+}
+```
+
+---
+
+### 🔹 2. Thymeleaf Template Example (e.g. `user-template.html`)
+
+```html
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+    <h2>User Info</h2>
+    <p>Name: <span th:text="${name}"></span></p>
+    <p>Age: <span th:text="${age}"></span></p>
+    <p>Role: <span th:text="${role}"></span></p>
+</body>
+</html>
+```
+
+---
+
+### 🔹 3. Example Usage
+
+```java
+@Autowired
+private ThymeleafRendererUtil rendererUtil;
+
+public void renderExample() {
+    User user = new User("Alice", 25, "Admin");
+
+    String renderedHtml = rendererUtil.renderObject(user, "user-template");
+    System.out.println(renderedHtml);
+}
+```
+
+---
+
+### 🧪 Sample Output
+
+```html
+<h2>User Info</h2>
+<p>Name: Alice</p>
+<p>Age: 25</p>
+<p>Role: Admin</p>
+```
+
+---
+
+### 🔧 Optional Enhancements
+
+* Allow passing extra variables (e.g. `Map<String, Object> extras`)
+* Use Jackson to flatten nested objects
+* Render from string template instead of file
+
+Would you like that version as well?
