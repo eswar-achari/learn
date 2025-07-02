@@ -1,0 +1,223 @@
+# S3 Event Notification to Kafka for File Changes in Java
+
+Here's a complete implementation to handle S3 file change notifications and publish them to a Kafka topic without sending the file content:
+
+## 1. AWS S3 Event Notification Configuration
+
+First, you need to configure your S3 bucket to send notifications to an SQS queue or directly to an AWS Lambda function. I'll show the Lambda approach which is more straightforward.
+
+### S3 Bucket Notification Configuration (AWS Console)
+1. Go to your S3 bucket → Properties → Event notifications
+2. Create notification with:
+   - Event types: `s3:ObjectCreated:*`, `s3:ObjectRemoved:*`, etc.
+   - Destination: Lambda function
+
+## 2. Lambda Function Implementation
+
+```java
+import com.amazonaws.services.lambda.runtime.Context;
+import com.amazonaws.services.lambda.runtime.RequestHandler;
+import com.amazonaws.services.lambda.runtime.events.S3Event;
+import com.amazonaws.services.s3.event.S3EventNotification.S3EventNotificationRecord;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+
+import java.util.Properties;
+
+public class S3EventToKafkaHandler implements RequestHandler<S3Event, String> {
+
+    private final Producer<String, String> kafkaProducer;
+    private final String kafkaTopic = "s3-file-changes"; // Your Kafka topic name
+
+    public S3EventToKafkaHandler() {
+        // Initialize Kafka producer
+        Properties props = new Properties();
+        props.put("bootstrap.servers", "your-kafka-brokers:9092");
+        props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        
+        this.kafkaProducer = new KafkaProducer<>(props);
+    }
+
+    @Override
+    public String handleRequest(S3Event s3Event, Context context) {
+        for (S3EventNotificationRecord record : s3Event.getRecords()) {
+            String eventName = record.getEventName();
+            String bucketName = record.getS3().getBucket().getName();
+            String objectKey = record.getS3().getObject().getKey();
+            long fileSize = record.getS3().getObject().getSizeAsLong();
+            String eventTime = record.getEventTime();
+
+            // Create a JSON message with the file change information
+            String message = String.format(
+                "{\"event\":\"%s\",\"bucket\":\"%s\",\"key\":\"%s\",\"size\":%d,\"timestamp\":\"%s\"}",
+                eventName, bucketName, objectKey, fileSize, eventTime
+            );
+
+            // Send to Kafka
+            kafkaProducer.send(new ProducerRecord<>(kafkaTopic, objectKey, message));
+        }
+        
+        return "Successfully processed " + s3Event.getRecords().size() + " records.";
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+        kafkaProducer.close();
+        super.finalize();
+    }
+}
+```
+
+## 3. Alternative Approach: Using SQS + EC2/ECS Worker
+
+If you prefer not to use Lambda, you can set up an SQS queue and a worker service:
+
+### S3 Configuration
+1. Configure S3 to send notifications to SQS queue
+2. Create a standard SQS queue with appropriate permissions
+
+### Worker Service Implementation
+
+```java
+import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
+import com.amazonaws.services.sqs.model.Message;
+import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.json.JSONObject;
+
+import java.util.Properties;
+
+public class S3EventKafkaForwarder {
+
+    private final AmazonSQS sqs;
+    private final Producer<String, String> kafkaProducer;
+    private final String queueUrl;
+    private final String kafkaTopic = "s3-file-changes";
+
+    public S3EventKafkaForwarder(String queueUrl) {
+        this.sqs = AmazonSQSClientBuilder.defaultClient();
+        this.queueUrl = queueUrl;
+        
+        Properties props = new Properties();
+        props.put("bootstrap.servers", "your-kafka-brokers:9092");
+        props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        this.kafkaProducer = new KafkaProducer<>(props);
+    }
+
+    public void startListening() {
+        while (true) {
+            ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest(queueUrl)
+                .withMaxNumberOfMessages(10)
+                .withWaitTimeSeconds(20);
+
+            for (Message message : sqs.receiveMessage(receiveMessageRequest).getMessages()) {
+                try {
+                    processS3Event(message.getBody());
+                    sqs.deleteMessage(queueUrl, message.getReceiptHandle());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private void processS3Event(String eventMessage) {
+        JSONObject event = new JSONObject(eventMessage);
+        JSONObject s3 = event.getJSONObject("s3");
+        JSONObject bucket = s3.getJSONObject("bucket");
+        JSONObject object = s3.getJSONObject("object");
+
+        String eventName = event.getString("eventName");
+        String bucketName = bucket.getString("name");
+        String objectKey = object.getString("key");
+        long fileSize = object.optLong("size", 0);
+        String eventTime = event.getString("eventTime");
+
+        String kafkaMessage = new JSONObject()
+            .put("event", eventName)
+            .put("bucket", bucketName)
+            .put("key", objectKey)
+            .put("size", fileSize)
+            .put("timestamp", eventTime)
+            .toString();
+
+        kafkaProducer.send(new ProducerRecord<>(kafkaTopic, objectKey, kafkaMessage));
+    }
+
+    public static void main(String[] args) {
+        String queueUrl = "https://sqs.your-region.amazonaws.com/your-account-id/your-queue-name";
+        S3EventKafkaForwarder forwarder = new S3EventKafkaForwarder(queueUrl);
+        forwarder.startListening();
+    }
+}
+```
+
+## 4. Message Format in Kafka
+
+The messages published to Kafka will have this structure:
+```json
+{
+  "event": "ObjectCreated:Put",
+  "bucket": "your-bucket-name",
+  "key": "path/to/file.txt",
+  "size": 1024,
+  "timestamp": "2023-10-01T12:00:00.000Z"
+}
+```
+
+## 5. Deployment Options
+
+1. **Lambda Approach**:
+   - Package your Java code as a JAR and upload to Lambda
+   - Set appropriate memory and timeout
+   - Configure S3 to trigger this Lambda
+
+2. **Worker Service Approach**:
+   - Deploy as a long-running service on EC2, ECS, or EKS
+   - Consider using Docker for easy deployment
+   - Set up proper logging and monitoring
+
+## 6. Required Dependencies (Maven)
+
+```xml
+<dependencies>
+    <!-- AWS SDK -->
+    <dependency>
+        <groupId>com.amazonaws</groupId>
+        <artifactId>aws-lambda-java-core</artifactId>
+        <version>1.2.2</version>
+    </dependency>
+    <dependency>
+        <groupId>com.amazonaws</groupId>
+        <artifactId>aws-lambda-java-events</artifactId>
+        <version>3.11.1</version>
+    </dependency>
+    <dependency>
+        <groupId>com.amazonaws</groupId>
+        <artifactId>aws-java-sdk-sqs</artifactId>
+        <version>1.12.400</version>
+    </dependency>
+    
+    <!-- Kafka -->
+    <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-clients</artifactId>
+        <version>3.4.0</version>
+    </dependency>
+    
+    <!-- JSON -->
+    <dependency>
+        <groupId>org.json</groupId>
+        <artifactId>json</artifactId>
+        <version>20230618</version>
+    </dependency>
+</dependencies>
+```
+
+This implementation provides a robust solution for monitoring S3 file changes and publishing notifications to Kafka without transferring the actual file content.
