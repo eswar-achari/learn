@@ -1,0 +1,89 @@
+# Python Code to Suggest Titles for Documents using LlamaIndex
+
+Here's a Python script that uses LlamaIndex's title extractor to generate suggested titles for documents:
+
+```python
+from llama_index.core import Document
+from llama_index.core.extractors import TitleExtractor
+from llama_index.core.ingestion import IngestionPipeline
+from pathlib import Path
+
+def suggest_titles_for_documents(documents, llm=None):
+    """
+    Generate title suggestions for a list of documents.
+    
+    Args:
+        documents: List of Document objects or file paths
+        llm: Optional LLM to use for title generation (default uses default LLM)
+    
+    Returns:
+        List of dictionaries containing original content and suggested titles
+    """
+    # Initialize the title extractor
+    title_extractor = TitleExtractor(llm=llm)
+    
+    # Create an ingestion pipeline with just the title extractor
+    pipeline = IngestionPipeline(transformations=[title_extractor])
+    
+    # Process documents (convert file paths to Document objects if needed)
+    processed_docs = []
+    for doc in documents:
+        if isinstance(doc, (str, Path)):
+            with open(doc, 'r', encoding='utf-8') as f:
+                content = f.read()
+            doc_obj = Document(text=content)
+        else:
+            doc_obj = doc
+        
+        # Run the pipeline on the document
+        processed_doc = pipeline.run(documents=[doc_obj])
+        processed_docs.append({
+            "original_content": doc_obj.text[:200] + "..." if len(doc_obj.text) > 200 else doc_obj.text,
+            "suggested_titles": processed_doc[0].metadata.get("document_title", "No title generated")
+        })
+    
+    return processed_docs
+
+# Example usage
+if __name__ == "__main__":
+    # Example documents (can be file paths or Document objects)
+    example_docs = [
+        "The quick brown fox jumps over the lazy dog. This is a sample document about animal behavior.",
+        Document(text="""Artificial intelligence is transforming industries across the world. 
+                      From healthcare to finance, AI applications are becoming increasingly prevalent."""),
+        # You can also use file paths:
+        # "path/to/your/document.txt"
+    ]
+    
+    # Get title suggestions
+    title_suggestions = suggest_titles_for_documents(example_docs)
+    
+    # Print results
+    for i, suggestion in enumerate(title_suggestions):
+        print(f"\nDocument {i+1}:")
+        print(f"Content snippet: {suggestion['original_content']}")
+        print(f"Suggested title: {suggestion['suggested_titles']}")
+```
+
+## How This Works:
+
+1. The code defines a `suggest_titles_for_documents` function that takes documents (either as text, Document objects, or file paths).
+
+2. It uses LlamaIndex's `TitleExtractor` which:
+   - Extracts key information from the document
+   - Generates a concise, informative title
+   - Can optionally use a specific LLM (defaults to the system's default LLM)
+
+3. The function processes each document through an ingestion pipeline that only contains the title extractor.
+
+4. For each document, it returns both a snippet of the original content and the suggested title(s).
+
+5. The example shows usage with both direct text content and Document objects.
+
+## Customization Options:
+
+- You can pass a specific LLM to the `TitleExtractor` for potentially better results
+- The extractor has parameters like `nodes=5` (number of nodes to consider) that you can adjust
+- You can combine this with other extractors in the pipeline for more comprehensive metadata extraction
+
+Would you like me to modify any part of this implementation for your specific use case?
