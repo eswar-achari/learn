@@ -1,0 +1,86 @@
+# Title Extractor Using LlamaIndex Pipeline
+
+Here's how to properly implement a title extractor pipeline with LlamaIndex while avoiding the "event loop is closed" error:
+
+## Solution 1: Synchronous Approach (Recommended for Simple Cases)
+
+```python
+from llama_index.core import Pipeline
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.extractors import TitleExtractor
+
+# Create pipeline components
+node_parser = SentenceSplitter()
+title_extractor = TitleExtractor()
+
+# Build pipeline
+pipeline = Pipeline(
+    modules=[
+        ("node_parser", node_parser),
+        ("title_extractor", title_extractor)
+    ]
+)
+
+# Process documents
+documents = [...]  # Your list of documents
+nodes = pipeline.run(documents=documents)
+
+# Extract titles
+titles = [node.metadata["document_title"] for node in nodes]
+print(titles)
+```
+
+## Solution 2: Asynchronous Approach (For Advanced Use Cases)
+
+```python
+import asyncio
+from llama_index.core import Pipeline
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.extractors import TitleExtractor
+
+async def main():
+    # Create pipeline
+    pipeline = Pipeline(
+        modules=[
+            ("node_parser", SentenceSplitter()),
+            ("title_extractor", TitleExtractor())
+        ]
+    )
+    
+    documents = [...]  # Your list of documents
+    nodes = await pipeline.arun(documents=documents)
+    
+    titles = [node.metadata["document_title"] for node in nodes]
+    print(titles)
+
+asyncio.run(main())
+```
+
+## Solution 3: For Jupyter Notebooks
+
+```python
+!pip install nest_asyncio
+import nest_asyncio
+nest_asyncio.apply()
+
+# Then use the synchronous approach (Solution 1)
+```
+
+## Common Fixes for "Event Loop is Closed" Error:
+
+1. **Don't mix sync and async calls** - Stick to either all sync (`.run()`) or all async (`.arun()`)
+2. **Avoid nested event loops** - Use `nest_asyncio` in Jupyter environments
+3. **Close resources properly** - If creating custom components, ensure proper cleanup
+
+## Advanced Title Extraction Options:
+
+```python
+# Customize the title extractor
+title_extractor = TitleExtractor(
+    llm=llm,  # Optional: specify LLM model
+    nodes=5,  # Number of nodes to consider for title generation
+    prompt_template="..."  # Custom prompt template
+)
+```
+
+Would you like me to adapt any of these solutions to your specific document format or use case?
