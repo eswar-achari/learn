@@ -1,0 +1,22 @@
+from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, ServiceContext
+from llama_index.llms import OpenAI
+import os
+
+# Set your OpenAI API key (or whichever LLM you are using)
+os.environ["OPENAI_API_KEY"] = "your-api-key"
+
+# Step 1: Load the PDF file
+documents = SimpleDirectoryReader(input_dir="./pdfs").load_data()
+
+# Step 2: Create a service context with an LLM
+llm = OpenAI(model="gpt-4")  # or "gpt-3.5-turbo" etc.
+service_context = ServiceContext.from_defaults(llm=llm)
+
+# Step 3: Build the index
+index = VectorStoreIndex.from_documents(documents, service_context=service_context)
+
+# Step 4: Query the index to generate a title
+query_engine = index.as_query_engine()
+response = query_engine.query("Generate a concise, descriptive title based on the content of this document.")
+
+print("Generated Title:", response)
