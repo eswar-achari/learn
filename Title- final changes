@@ -1,0 +1,85 @@
+import os
+import glob
+import logging
+import asyncio
+import aiofiles
+from llama_index.llms.openai_like import OpenAILike
+from llama_index.ingestion import IngestionPipeline
+from llama_index.extractors import TitleExtractor
+from llama_index.schema import TextNode
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+class MarkdownTitleExtractor:
+    def __init__(self, md_dir: str, api_key: str, model: str = "gpt-3.5-turbo", batch_size: int = 4):
+        self.md_dir = md_dir
+        self.batch_size = batch_size
+        self.llm = OpenAILike(
+            api_base="https://api.openai.com/v1",
+            api_key=api_key,
+            model=model
+        )
+
+    async def load_markdown_files(self):
+        files = glob.glob(os.path.join(self.md_dir, "*.md"))
+        documents = []
+        for path in files:
+            try:
+                async with aiofiles.open(path, mode='r', encoding='utf-8') as f:
+                    content = await f.read()
+                    documents.append(TextNode(text=content, metadata={"filename": os.path.basename(path)}))
+            except Exception as e:
+                logging.error(f"Error reading {path}: {e}")
+        return documents
+
+    async def process_batch(self, batch):
+        try:
+            title_extractor = TitleExtractor(llm=self.llm, nodes=5)
+            pipeline = IngestionPipeline(transformations=[title_extractor])
+            processed_docs = pipeline.run(documents=batch)
+            return [{
+                "filename": doc.metadata.get("filename", "unknown"),
+                "summary": doc.metadata.get("section_summary", "No summary"),
+                "suggested_title": doc.metadata.get("document_title", "No title")
+            } for doc in processed_docs]
+        except Exception as e:
+            logging.error(f"Batch processing failed: {e}")
+            return []
+
+    async def extract_titles(self):
+        documents = await self.load_markdown_files()
+        if not documents:
+            logging.warning("No markdown files found.")
+            return []
+
+        logging.info(f"Loaded {len(documents)} markdown files.")
+
+        tasks = []
+        for i in range(0, len(documents), self.batch_size):
+            batch = documents[i:i + self.batch_size]
+            tasks.append(asyncio.create_task(self.process_batch(batch)))
+
+        results = []
+        for task in asyncio.as_completed(tasks):
+            try:
+                result = await task
+                results.extend(result)
+            except Exception as e:
+                logging.error(f"Async task failed: {e}")
+        
+        # Log final results
+        for item in results:
+            logging.info(f"\nFile: {item['filename']}\nTitle: {item['suggested_title']}\nSummary: {item['summary']}\n")
+
+        return results
+
+
+# Run if main
+if __name__ == "__main__":
+    api_key = os.getenv("OPENAI_API_KEY") or "your-api-key"  # Set or replace
+    extractor = MarkdownTitleExtractor(md_dir="md_files", api_key=api_key)
+
+    try:
+        asyncio.run(extractor.extract_titles())
+    except Exception as e:
+        logging.error(f"Pipeline failed: {e}")
