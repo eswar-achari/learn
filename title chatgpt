@@ -1,0 +1,129 @@
+Here's a **production-ready Python implementation** using:
+
+* ✅ `LlamaIndex` title extraction logic
+* ✅ `.md` file reading
+* ✅ Multithreading (`ThreadPoolExecutor`)
+* ✅ Logging
+* ✅ Exception handling
+* ✅ Class-based modular structure
+
+---
+
+### ✅ Project Structure
+
+```
+.
+├── md_files/
+│   ├── file1.md
+│   └── file2.md
+├── title_extractor.py
+```
+
+---
+
+### ✅ `title_extractor.py`
+
+```python
+import os
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from llama_index.core import Document
+from llama_index.llms import OpenAI
+from llama_index.core import ServiceContext
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("title_extraction.log"),
+        logging.StreamHandler()
+    ]
+)
+
+class MarkdownTitleExtractor:
+    def __init__(self, md_dir: str, model: str = "gpt-4"):
+        self.md_dir = md_dir
+        self.llm = OpenAI(model=model)
+        self.service_context = ServiceContext.from_defaults(llm=self.llm)
+        self.max_workers = 4
+
+    def _read_markdown(self, file_path: str) -> str:
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            logging.error(f"Error reading file {file_path}: {e}")
+            return ""
+
+    def _extract_title_from_content(self, content: str, file_name: str) -> str:
+        try:
+            if not content.strip():
+                raise ValueError("Empty content")
+            document = Document(text=content)
+            query_engine = self.service_context.llm.as_query_engine()
+            prompt = "Generate a concise and relevant title for the given markdown content."
+            response = query_engine.query(prompt + "\n\n" + document.text[:3000])  # Limit context
+            return str(response).strip()
+        except Exception as e:
+            logging.error(f"Title extraction failed for {file_name}: {e}")
+            return "Title Extraction Failed"
+
+    def _process_file(self, file_path: str) -> tuple:
+        file_name = os.path.basename(file_path)
+        logging.info(f"Processing file: {file_name}")
+        content = self._read_markdown(file_path)
+        title = self._extract_title_from_content(content, file_name)
+        return file_name, title
+
+    def extract_titles(self):
+        files = [
+            os.path.join(self.md_dir, f)
+            for f in os.listdir(self.md_dir)
+            if f.endswith(".md")
+        ]
+
+        results = {}
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            future_to_file = {executor.submit(self._process_file, f): f for f in files}
+            for future in as_completed(future_to_file):
+                try:
+                    file_name, title = future.result()
+                    results[file_name] = title
+                    logging.info(f"✅ {file_name}: {title}")
+                except Exception as e:
+                    logging.error(f"Exception during processing: {e}")
+        return results
+
+
+if __name__ == "__main__":
+    # Replace this path with your actual markdown files directory
+    extractor = MarkdownTitleExtractor(md_dir="./md_files")
+    titles = extractor.extract_titles()
+    
+    print("\nFinal Titles:")
+    for file, title in titles.items():
+        print(f"{file}: {title}")
+```
+
+---
+
+### ✅ Output Example
+
+When run, the program will:
+
+* Read all `.md` files from `./md_files`
+* Use multi-threading for faster processing
+* Log progress to `title_extraction.log`
+* Print the final extracted titles in the console
+
+---
+
+### 🛠️ Next Options
+
+* Write results to a `.csv` or `.json` file
+* Add retry logic or fallback models
+* Convert to an API (Flask/FastAPI) or CLI tool
+
+Would you like help extending it to save the titles into a report or turn it into a microservice?
