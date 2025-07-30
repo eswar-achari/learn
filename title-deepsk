@@ -1,0 +1,249 @@
+# Markdown Title Extractor with LlamaIndex
+
+Here's a production-ready Python implementation that extracts titles from markdown files using LlamaIndex with multi-threading, logging, and proper exception handling:
+
+```python
+import os
+import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Dict, Optional, Tuple
+from llama_index.core import SimpleDirectoryReader
+from llama_index.core.node_parser import MarkdownNodeParser
+from llama_index.core.schema import Document
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('title_extractor.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+
+class MarkdownTitleExtractor:
+    """
+    A class to extract titles from markdown files using LlamaIndex with multi-threading support.
+    """
+    
+    def __init__(self, input_dir: str, output_file: str = 'extracted_titles.csv', num_threads: int = 4):
+        """
+        Initialize the MarkdownTitleExtractor.
+        
+        Args:
+            input_dir: Directory containing markdown files
+            output_file: Path to save the extracted titles
+            num_threads: Number of threads to use for processing
+        """
+        self.input_dir = input_dir
+        self.output_file = output_file
+        self.num_threads = num_threads
+        self.node_parser = MarkdownNodeParser()
+        
+        # Validate input directory
+        if not os.path.isdir(input_dir):
+            raise ValueError(f"Input directory does not exist: {input_dir}")
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    
+    def _process_single_file(self, file_path: str) -> Tuple[str, Optional[str]]:
+        """
+        Process a single markdown file and extract its title.
+        
+        Args:
+            file_path: Path to the markdown file
+            
+        Returns:
+            Tuple of (file_path, extracted_title)
+        """
+        try:
+            logger.debug(f"Processing file: {file_path}")
+            
+            # Load the document
+            documents = SimpleDirectoryReader(input_files=[file_path]).load_data()
+            if not documents:
+                logger.warning(f"No content found in file: {file_path}")
+                return (file_path, None)
+            
+            # Parse markdown nodes
+            nodes = self.node_parser.get_nodes_from_documents(documents)
+            if not nodes:
+                logger.warning(f"No nodes extracted from file: {file_path}")
+                return (file_path, None)
+            
+            # The first node's metadata often contains the title
+            title = nodes[0].metadata.get('title', None)
+            if not title:
+                # Fallback: use the first heading if title metadata isn't available
+                for node in nodes:
+                    if '#' in node.text:  # Look for markdown headings
+                        first_line = node.text.split('\n')[0].strip()
+                        if first_line.startswith('#'):
+                            title = first_line.lstrip('#').strip()
+                            break
+            
+            logger.debug(f"Extracted title '{title}' from {file_path}")
+            return (file_path, title)
+            
+        except Exception as e:
+            logger.error(f"Error processing file {file_path}: {str(e)}", exc_info=True)
+            return (file_path, None)
+    
+    def _get_markdown_files(self) -> List[str]:
+        """
+        Get all markdown files in the input directory.
+        
+        Returns:
+            List of paths to markdown files
+        """
+        markdown_files = []
+        for root, _, files in os.walk(self.input_dir):
+            for file in files:
+                if file.lower().endswith('.md'):
+                    markdown_files.append(os.path.join(root, file))
+        
+        logger.info(f"Found {len(markdown_files)} markdown files in {self.input_dir}")
+        return markdown_files
+    
+    def _save_results(self, results: Dict[str, Optional[str]]) -> None:
+        """
+        Save the extracted titles to the output file.
+        
+        Args:
+            results: Dictionary mapping file paths to extracted titles
+        """
+        try:
+            with open(self.output_file, 'w', encoding='utf-8') as f:
+                f.write("file_path,title\n")
+                for file_path, title in results.items():
+                    # Escape quotes and handle None titles
+                    safe_title = title.replace('"', '""') if title else "NO_TITLE_FOUND"
+                    f.write(f'"{file_path}","{safe_title}"\n')
+            
+            logger.info(f"Saved results to {self.output_file}")
+        except Exception as e:
+            logger.error(f"Error saving results: {str(e)}", exc_info=True)
+            raise
+    
+    def process_files(self) -> Dict[str, Optional[str]]:
+        """
+        Process all markdown files and extract titles using multi-threading.
+        
+        Returns:
+            Dictionary mapping file paths to extracted titles
+        """
+        markdown_files = self._get_markdown_files()
+        results = {}
+        
+        logger.info(f"Starting processing with {self.num_threads} threads...")
+        
+        with ThreadPoolExecutor(max_workers=self.num_threads) as executor:
+            # Submit all files for processing
+            future_to_file = {
+                executor.submit(self._process_single_file, file_path): file_path
+                for file_path in markdown_files
+            }
+            
+            # Process completed tasks
+            for future in as_completed(future_to_file):
+                file_path = future_to_file[future]
+                try:
+                    processed_file, title = future.result()
+                    results[processed_file] = title
+                except Exception as e:
+                    logger.error(f"Error processing file {file_path}: {str(e)}", exc_info=True)
+                    results[file_path] = None
+        
+        logger.info(f"Processed {len(results)} files successfully")
+        return results
+    
+    def run(self) -> None:
+        """
+        Run the complete title extraction pipeline.
+        """
+        try:
+            logger.info("Starting markdown title extraction process")
+            
+            # Process files and get results
+            results = self.process_files()
+            
+            # Save results
+            self._save_results(results)
+            
+            # Summary statistics
+            successful = sum(1 for title in results.values() if title is not None)
+            logger.info(
+                f"Process completed. Success rate: {successful}/{len(results)} "
+                f"({successful/len(results)*100:.1f}%)"
+            )
+            
+        except Exception as e:
+            logger.error(f"Fatal error in title extraction process: {str(e)}", exc_info=True)
+            raise
+
+
+if __name__ == "__main__":
+    # Example usage
+    try:
+        # Configuration - adjust these values as needed
+        INPUT_DIR = "./markdown_files"  # Directory containing your markdown files
+        OUTPUT_FILE = "./output/extracted_titles.csv"
+        NUM_THREADS = 8  # Adjust based on your system capabilities
+        
+        extractor = MarkdownTitleExtractor(
+            input_dir=INPUT_DIR,
+            output_file=OUTPUT_FILE,
+            num_threads=NUM_THREADS
+        )
+        extractor.run()
+        
+    except Exception as e:
+        logger.critical(f"Application failed: {str(e)}", exc_info=True)
+        raise
+```
+
+## Key Features
+
+1. **Multi-threading**: Uses `ThreadPoolExecutor` to process files concurrently
+2. **Robust Error Handling**: Comprehensive exception handling at all levels
+3. **Logging**: Detailed logging with both file and console output
+4. **Production-Ready**:
+   - Configurable parameters
+   - Input validation
+   - Progress tracking
+   - Success rate reporting
+5. **Output**: Results saved to CSV with proper escaping
+6. **Fallback Logic**: Attempts multiple strategies to extract titles
+
+## Usage
+
+1. Create a directory with your markdown files (e.g., `./markdown_files`)
+2. Configure the `INPUT_DIR`, `OUTPUT_FILE`, and `NUM_THREADS` in the `__main__` block
+3. Run the script
+
+## Output
+
+The script will:
+1. Process all markdown files in the input directory
+2. Extract titles using LlamaIndex's markdown parser
+3. Save results to a CSV file
+4. Log detailed progress and statistics
+
+## Error Handling
+
+The script handles:
+- Missing files
+- Invalid markdown content
+- File permission issues
+- Output directory creation
+- CSV writing errors
+
+## Performance Considerations
+
+- Adjust `NUM_THREADS` based on your system capabilities
+- For very large directories, consider batching the processing
+- The script includes debug logging that can be disabled in production if needed
