@@ -1,0 +1,51 @@
+import json
+
+def generate_package_json(file_content):
+    """
+    Processes package information from text content and generates JSON objects for each package.
+    
+    Args:
+        file_content (str): The text content of the file
+        
+    Returns:
+        list: A list of JSON strings in the specified format
+    """
+    # Initialize variables
+    in_top_level = False
+    in_transitive = False
+    packages = []
+    
+    # Process each line
+    for line in file_content.split('\n'):
+        line = line.strip()
+        
+        # Detect sections
+        if line.startswith('Top-Level Package'):
+            in_top_level = True
+            in_transitive = False
+            continue
+        elif line.startswith('Transitive Package'):
+            in_top_level = False
+            in_transitive = True
+            continue
+        elif line.startswith('Requested'):
+            # Stop processing when we reach the version numbers section
+            break
+        
+        # Process package lines
+        if (in_top_level or in_transitive) and line.startswith('>'):
+            package_name = line[1:].strip()
+            package_json = {
+                "package name": package_name,
+                "version": ""  # Version not available in the provided data
+            }
+            packages.append(json.dumps(package_json))
+    
+    return packages
+
+# Example usage:
+# with open('1000569251.txt', 'r') as f:
+#     content = f.read()
+#     package_jsons = generate_package_json(content)
+#     for pkg in package_jsons:
+#         print(pkg)
