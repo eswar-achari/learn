@@ -311,3 +311,52 @@ INFO  RockDataKafkaService - Finished streaming Hive data to Kafka successfully.
 * **Configurable batch size** allows fine-tuning based on infrastructure capacity.
 * **Compression (`snappy`)** further optimizes Kafka traffic.
 * **Logging** gives clear visibility into performance and progress.
+
+public void publishToKafka(List<CVEDailyScorecardEntity> data) {
+    if (data == null || data.isEmpty()) {
+        log.warn("No records to publish to Kafka.");
+        return;
+    }
+
+    int totalRecords = data.size();
+    int batchCount = Math.ceilDiv(totalRecords, kafkaBatchSize); // Java 21
+    log.info("Starting Kafka publishing. Total records: {}, Batches: {}", totalRecords, batchCount);
+
+    // Executor: limit threads to available CPUs or batchCount (whichever is smaller)
+    ExecutorService executor = Executors.newFixedThreadPool(
+            Math.min(batchCount, Runtime.getRuntime().availableProcessors())
+    );
+
+    try {
+        // Submit tasks for each batch
+        List<CompletableFuture<Void>> futures =
+                IntStream.iterate(0, i -> i < totalRecords, i -> i + kafkaBatchSize)
+                        .mapToObj(start -> CompletableFuture.runAsync(() -> {
+                            int end = Math.min(start + kafkaBatchSize, totalRecords);
+                            List<CVEDailyScorecardEntity> batch = data.subList(start, end);
+                            int batchNumber = (start / kafkaBatchSize) + 1;
+
+                            log.info("Publishing batch {} of {} (records {}-{})",
+                                    batchNumber, batchCount, start, end);
+
+                            // Send each record sequentially within the batch
+                            batch.forEach(record ->
+                                    kafkaTemplate.send(kafkaTopic, record.getGisId(), record));
+
+                            // Ensure all records in this batch are flushed before completing
+                            kafkaTemplate.flush();
+                            log.info("✅ Completed publishing batch {} of {}.", batchNumber, batchCount);
+
+                        }, executor))
+                        .toList();
+
+        // Wait for all batch tasks to complete
+        CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+
+        log.info("🎉 Completed publishing all {} records across {} batches.", totalRecords, batchCount);
+
+    } finally {
+        executor.shutdown();
+    }
+}
+
