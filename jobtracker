@@ -1,0 +1,38 @@
+import org.springframework.stereotype.Component;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Component
+public class DataLoadTracker {
+
+    private final Map<String, Long> jobsTracker = new ConcurrentHashMap<>();
+
+    /**
+     * Increment the job count by 1.
+     */
+    public void increment(String jobName) {
+        jobsTracker.merge(jobName, 1L, Long::sum);
+    }
+
+    /**
+     * Reset the job count to 0.
+     */
+    public void reset(String jobName) {
+        jobsTracker.put(jobName, 0L);
+    }
+
+    /**
+     * Get the count of a specific job.
+     */
+    public Long getCount(String jobName) {
+        return jobsTracker.getOrDefault(jobName, 0L);
+    }
+
+    /**
+     * Get all job counts.
+     */
+    public Map<String, Long> getAllCounts() {
+        return Map.copyOf(jobsTracker); // returns an unmodifiable snapshot
+    }
+}
