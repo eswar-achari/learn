@@ -1,0 +1,48 @@
+@startuml
+!theme plain
+title User Request Flow
+
+skinparam style strict
+
+|**PENPAL UI**|
+start
+:User (NRK123) initiates a request to view(action=VIEW) document(Document-123);
+:Send Request = PENPAL-API;
+
+|**PENPAL-API**|
+:Check if user data exists in local MongoDB;
+if (User data found in MongoDB?) then (yes)
+  :Fetch user roles/resources from MongoDB;
+else (no)
+  :Fetch user roles/resources from GES Authorization;
+  :Store user data in MongoDB for future requests;
+endif
+
+:Fetch Document details from Document-Resource-Mapping collection;
+:Call Context-Creation-Service to create LLM prompt;
+
+|**Context-Creation-Service**|
+:Create optimized prompt using:\n- User roles/resources\n- Document metadata\n- Request context;
+:Return formatted context to PENPAL-API;
+
+|**PENPAL-API**|
+:Evaluate authorization using local user data;
+if (Authorization = ALLOWED) then (yes)
+  :Send success response with Document-123\nback to the user interface;
+else (no)
+  :Send failure response with error details\nback to the user interface;
+endif
+
+|**PENPAL UI**|
+:Display the result of the request to the user;
+stop
+
+|**Background Job**|
+start
+repeat
+  :Fetch all users' latest data\nfrom GES SYSTEM;
+  :Upsert user data into MongoDB;
+  :Wait for scheduled interval;
+repeat while (Job running?) is (yes)
+stop
+@enduml
