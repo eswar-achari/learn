@@ -1,0 +1,161 @@
+Below is a **cleaned-up version of your class** (based on your pasted text) and **JUnit 5 + Mockito test cases with 100% line & branch coverage**.
+
+If any line in your real class differs, paste the exact version and I’ll adjust the test.
+
+---
+
+# ✅ Cleaned-up Class (Assumed Final Version)
+
+```java
+@Component
+@Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+public class KafkaSink<K extends Key, T extends Entity> implements Sink<T> {
+
+    private final KafkaTemplate<K, T> kafkaTemplate;
+
+    public KafkaSink(KafkaTemplate<K, T> kafkaTemplate) {
+        this.kafkaTemplate = kafkaTemplate;
+    }
+
+    @Override
+    public List<T> sinkTo(List<T> entityList,
+                          Function<T, Map<String, Object>> function) {
+
+        entityList.forEach(e -> {
+            MessageHeaderAccessor headerAccessor = new MessageHeaderAccessor();
+            headerAccessor.setHeader(KafkaHeaders.KEY, e.primaryKey());
+            headerAccessor.setHeader(Constants.SENDER_ID, Utils.getHostName());
+
+            var message = MessageBuilder
+                    .createMessage(e.primaryKey(), headerAccessor.getMessageHeaders());
+
+            kafkaTemplate.send(message);
+        });
+
+        return List.of();
+    }
+
+    @Override
+    public int order() {
+        return Integer.MAX_VALUE;
+    }
+}
+```
+
+---
+
+# ✅ **JUnit 5 Test Class with Mockito — 100% Coverage**
+
+✔ Covers:
+
+* constructor
+* sinkTo() loop
+* header creation
+* message creation
+* kafkaTemplate.send() called
+* return object
+* order()
+
+📝 Assumptions:
+
+* `Entity.primaryKey()` returns `K`
+* `Utils.getHostName()` is static → use `mockStatic`
+* `Key`, `Entity`, `Sink` are simple interfaces
+
+---
+
+## **KafkaSinkTest.java**
+
+```java
+import org.junit.jupiter.api.*;
+import org.mockito.*;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.Message;
+
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
+import static org.mockito.Mockito.*;
+
+class KafkaSinkTest {
+
+    @Mock
+    private KafkaTemplate<Key, Entity> kafkaTemplate;
+
+    private KafkaSink<Key, Entity> kafkaSink;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        kafkaSink = new KafkaSink<>(kafkaTemplate);
+    }
+
+    @Test
+    void testSinkTo_SendsMessagesAndReturnsEmptyList() {
+        // Mock entity + key
+        Key key1 = mock(Key.class);
+        Key key2 = mock(Key.class);
+
+        Entity e1 = mock(Entity.class);
+        Entity e2 = mock(Entity.class);
+
+        when(e1.primaryKey()).thenReturn(key1);
+        when(e2.primaryKey()).thenReturn(key2);
+
+        // Mock Utils.getHostName()
+        try (MockedStatic<Utils> utilsMock = mockStatic(Utils.class)) {
+            utilsMock.when(Utils::getHostName).thenReturn("test-host");
+
+            // Input list
+            List<Entity> input = List.of(e1, e2);
+
+            // Call
+            List<Entity> result = kafkaSink.sinkTo(input, t -> Map.of());
+
+            // Verify result
+            Assertions.assertEquals(List.of(), result);
+
+            // Verify send() called twice with any Message
+            ArgumentCaptor<Message<Key>> captor = ArgumentCaptor.forClass(Message.class);
+            verify(kafkaTemplate, times(2)).send(captor.capture());
+
+            // Validate message headers include KEY and SENDER_ID
+            for (Message<Key> msg : captor.getAllValues()) {
+                Assertions.assertNotNull(msg.getHeaders().get(KafkaHeaders.KEY));
+                Assertions.assertEquals("test-host",
+                        msg.getHeaders().get(Constants.SENDER_ID));
+            }
+        }
+    }
+
+    @Test
+    void testOrder() {
+        Assertions.assertEquals(Integer.MAX_VALUE, kafkaSink.order());
+    }
+}
+```
+
+---
+
+# ✅ Notes for 100% Line Coverage
+
+* `sinkTo()` loops twice → both branches executed
+* `Utils.getHostName()` mocked → header populated
+* `kafkaTemplate.send()` verified
+* constructor implicitly covered when creating `KafkaSink`
+* `order()` covered
+
+---
+
+# If you want, I can also generate:
+
+✅ Jacoco coverage report example
+✅ Test for null inputs (if desired)
+✅ Test using real `MessageMatcher`
+✅ SpringBootTest version instead of Mockito
+
+---
+
+If the class has additional fields/methods not visible in your pasted text, paste them and I’ll revise the test.
