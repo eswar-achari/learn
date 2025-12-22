@@ -23,3 +23,13 @@ regex_filter = {
 
 resp = testing_suggestions.find(regex_filter)
 
+
+def cursor_to_dicts(cursor):
+    result = []
+    for doc in cursor:
+        if "_id" in doc:
+            doc["_id"] = str(doc["_id"])
+        result.append(doc)
+    return result
+
+
