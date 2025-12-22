@@ -10,3 +10,16 @@ regex_filter = {
 }
 
 resp = testing_suggestions.find(regex_filter)
+
+
+import re
+
+regex_filter = {
+    "categories": {
+        "$regex": re.escape(detected_category),
+        "$options": "i"
+    }
+}
+
+resp = testing_suggestions.find(regex_filter)
+
