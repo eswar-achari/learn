@@ -33,3 +33,15 @@ def cursor_to_dicts(cursor):
     return result
 
 
+
+ait_int: Optional[int] = (
+        int(ait.strip())
+        if isinstance(ait, str) and ait.strip().isdigit()
+        else None
+    )
+
+    ait_name_clean: Optional[str] = ait_name.strip() if isinstance(ait_name, str) else None
+    category_clean: Optional[str] = category.strip() if isinstance(category, str) else None
+
+    # -
+
