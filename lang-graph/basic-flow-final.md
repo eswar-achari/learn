@@ -1,15 +1,3 @@
-Got it 👍 — let’s **re-organize your LangGraph notes cleanly by concept**, in a **logical learning order**, so it’s easy to study, revise, or explain in interviews.
-
-I’ll move **line-level explanations under the right concept**, instead of following file order.
-
----
-
-# 📘 LangGraph (Python) – Concept-wise Organized Notes
-
-> Based on your attached code + latest 2025 LangGraph & LangChain practices
-
----
-
 ## 1️⃣ Core Idea: What Problem This Code Solves
 
 This program builds a **state-driven workflow** using **LangGraph**, where:
@@ -389,49 +377,6 @@ END
 ```
 
 ---
-
-## 1️⃣3️⃣ Latest Updates (2025 – Exam / Interview)
-
-### ✅ Recommended Imports
-
-```python
-from langchain_core.prompts import ChatPromptTemplate
-```
-
-(old `langchain.prompts` is deprecated)
-
----
-
-### ✅ Typed State is Best Practice
-
-Your `TypedDict` usage = ✔️ correct
-
----
-
-### ✅ Async First
-
-```python
-await app.ainvoke(state)
-```
-
-Mandatory for:
-
-- Streaming
-- MCP tools
-- Web backends
-
----
-
-### ✅ MCP Compatibility
-
-LangGraph integrates cleanly with:
-
-- MCP servers
-- Tool discovery
-- Agent-to-agent workflows
-
----
-
 ## 🧠 Final One-Line Takeaway
 
 > **LangGraph lets you build LLM systems as deterministic state machines, where LLMs decide paths and tools do the work.**
