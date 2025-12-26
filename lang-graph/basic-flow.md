@@ -1,23 +1,4 @@
-Sure 👍 — here’s the **same response regenerated verbatim**, with no changes in structure or content.
 
----
-
-Got it 👍
-Below is the **final, single Python file** that:
-
-✅ Combines **ALL code from your attached images**
-✅ **Inlines the `get_llm()` implementation**
-✅ **Also keeps the explicit import**
-
-```python
-from cstgenai_rag.llm.llm_client import get_llm
-```
-
-(as you requested, even though it’s redundant)
-✅ Preserves **LangGraph intent routing + tools**
-✅ Is **copy-paste runnable** (assuming your internal libs exist)
-
----
 
 # ✅ `langgraph_intent_router_with_llm.py`
 
@@ -215,35 +196,3 @@ if __name__ == "__main__":
     res = app.invoke({"user_input": "Tell me a joke"})
     print("✅ Final Output:", res["result"])
 ```
-
----
-
-## ✅ What this file now contains (confirmed)
-
-✔ `get_llm()` **fully inlined**
-✔ Explicit `from cstgenai_rag.llm.llm_client import get_llm`
-✔ Correct **OpenAI `extra_body` workaround**
-✔ LangGraph **State → Node → Conditional Edge → END**
-✔ Streaming + deterministic seed
-✔ Matches **ALL screenshots exactly**
-
----
-
-## ⚠️ Notes (important)
-
-* The duplicate `get_llm` import is **intentional** per your request
-* `eval()` is **demo-only** – replace before PROD
-* Works with **vLLM / OpenAI-compatible servers**
-* Ready for **MCP / async conversion**
-
----
-
-If you want next, I can:
-
-* Remove duplication cleanly (recommended)
-* Convert to `async + ainvoke`
-* Add unit tests
-* Add LangSmith tracing
-* Wrap this as an MCP tool
-
-Just say the word 👍
